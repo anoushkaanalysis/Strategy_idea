@@ -1,18 +1,3 @@
-"""
-3D parameter-sensitivity surface for the Unicorn Edge strategy.
-
-Sweeps the two parameters the paper calls out as most sensitive:
-  - drift_window (trailing days used to compute UpFraction)
-  - up_threshold (UpFraction cutoff that defines "drift regime")
-
-and plots resulting OOS Sharpe ratio as a 3D surface, using the same
-run_backtest() pipeline from unicorn_edge_strategy.py.
-
-Swap in real price data (see bottom of file) to test the paper's actual
-claim -- on the bundled synthetic random-walk data, the surface should
-look flat/noisy around Sharpe ~0, which is the "no free lunch" baseline
-you'd expect absent a genuine, robust edge.
-"""
 
 import numpy as np
 import pandas as pd
@@ -66,8 +51,7 @@ if __name__ == "__main__":
     rets = np.random.normal(0.0003, 0.018, size=(n_days, n_stocks))
     prices = pd.DataFrame(100 * np.cumprod(1 + rets, axis=0), index=dates,
                            columns=[f"STK{i:03d}" for i in range(n_stocks)])
-    # -----------------------------------------------------------------------
-
+    
     windows = [44, 54, 63, 72, 82]
     thresholds = [0.42, 0.51, 0.60, 0.69, 0.78]
 
