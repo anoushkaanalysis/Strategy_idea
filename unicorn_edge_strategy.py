@@ -1,50 +1,7 @@
-"""
-Unicorn Edge strategy
-======================
-Implementation of the value + short-term-reversal factor, gated by a
-stock-specific "drift regime" filter, as described in:
 
-    "Discovery of a 13-Sharpe OOS Factor: Drift Regimes Unlock Hidden
-     Cross-Sectional Predictability" (Singha, 2025, arXiv:2511.12490)
-
-This file gives you the actual mechanics (signal construction, regime gate,
-market-neutral portfolio construction, vol/drawdown scaling, kill-switch,
-and a backtester) so you can test the claim on real data yourself.
-
-IMPORTANT — read before trusting the output
---------------------------------------------
-The paper's headline numbers (OOS Sharpe > 13, ~159% annualized return,
-Sharpe rising as you shrink the universe/AUM) are extreme relative to
-anything documented in the academic or practitioner factor literature
-(typical well-known equity factors run Sharpe ~0.3-0.8 unlevered). Numbers
-like this on a widely-studied universe (S&P 500) with widely-known signals
-(price-inverse "value", 10-day reversal) are the textbook signature of:
-  - a parameter search over (drift window, threshold, weights) that wasn't
-    truly frozen out-of-sample,
-  - survivorship bias from using *current* constituents over 20 years
-    (the paper admits this and estimates it inflates results 20-30%, which
-    on its own does not explain a move from ~1 to ~13 Sharpe),
-  - only 3 non-overlapping 1-year OOS test windows, each coinciding with
-    unusually strong bull-market recoveries (2010-11, 2015-16, 2020-21) —
-    that's a very small, cherry-timed OOS sample to hang a "13 Sharpe"
-    headline on.
-Use this code to check the mechanism on your own out-of-sample data and
-form your own view — don't take the reported Sharpe at face value.
-
-Data format expected
---------------------
-A pandas DataFrame `prices` of daily adjusted close prices:
-    index = trading dates (DatetimeIndex)
-    columns = tickers
-"""
 
 import numpy as np
 import pandas as pd
-
-
-# ----------------------------------------------------------------------
-# 1. Signal construction
-# ----------------------------------------------------------------------
 
 def compute_value_signal(prices: pd.DataFrame) -> pd.DataFrame:
     """Price-based 'value': inverse price, converted to cross-sectional
@@ -77,7 +34,7 @@ def compute_base_factor(prices: pd.DataFrame, value_weight: float = 0.7,
 
 def compute_drift_regime(prices: pd.DataFrame, window: int = 63,
                           up_threshold: float = 0.60) -> pd.DataFrame:
-    """REGIME[i,t] = 1 if fraction of positive daily returns for stock i
+    [i,t] = 1 if fraction of positive daily returns for stock i
     over the trailing `window` days exceeds `up_threshold`, else 0."""
     daily_ret = prices.pct_change()
     is_up = (daily_ret > 0).astype(float)
@@ -89,7 +46,6 @@ def compute_drift_regime(prices: pd.DataFrame, window: int = 63,
 def compute_edge_signal(prices: pd.DataFrame, drift_window: int = 63,
                          up_threshold: float = 0.60, value_weight: float = 0.7,
                          reversal_lookback: int = 10) -> pd.DataFrame:
-    """EDGE = BASE * REGIME"""
     base = compute_base_factor(prices, value_weight, reversal_lookback)
     regime = compute_drift_regime(prices, drift_window, up_threshold)
     edge = base * regime
@@ -99,9 +55,7 @@ def compute_edge_signal(prices: pd.DataFrame, drift_window: int = 63,
     return edge
 
 
-# ----------------------------------------------------------------------
-# 2. Portfolio construction
-# ----------------------------------------------------------------------
+
 
 def edge_to_weights(edge: pd.DataFrame, gross_long: float = 0.5,
                      gross_short: float = 0.5) -> pd.DataFrame:
@@ -129,10 +83,6 @@ def edge_to_weights(edge: pd.DataFrame, gross_long: float = 0.5,
     return weights
 
 
-# ----------------------------------------------------------------------
-# 3. Backtest: returns, vol/DD scaling, kill-switch
-# ----------------------------------------------------------------------
-
 def backtest_returns(prices: pd.DataFrame, weights: pd.DataFrame,
                       cost_bp: float = 0.6) -> pd.Series:
     """Apply weights (decided using info available *through* day t-1) to
@@ -153,8 +103,6 @@ def scale_and_kill_switch(returns: pd.Series, train_returns: pd.Series,
                            vol_cap: float = 0.12, dd_cap: float = 0.15,
                            dd_kill: float = 0.30, roll_kill: float = -0.10,
                            roll_window: int = 63) -> pd.Series:
-    """Apply a static scale factor fit on `train_returns`, then a dynamic
-    kill-switch on the (scaled) `returns` series."""
     train_vol = train_returns.std() * np.sqrt(252)
     cum = (1 + train_returns).cumprod()
     train_dd = (cum / cum.cummax() - 1).min()
@@ -185,16 +133,10 @@ def performance_summary(returns: pd.Series) -> dict:
     return {"ann_return": ann_ret, "ann_vol": ann_vol, "sharpe": sharpe, "max_dd": max_dd}
 
 
-# ----------------------------------------------------------------------
-# 4. End-to-end convenience wrapper
-# ----------------------------------------------------------------------
 
 def run_backtest(prices: pd.DataFrame, drift_window: int = 63, up_threshold: float = 0.60,
                   value_weight: float = 0.7, reversal_lookback: int = 10,
                   cost_bp: float = 0.6, train_frac: float = 0.5) -> dict:
-    """Run the full pipeline and return a performance dict. The first
-    `train_frac` of the sample is used only to fit the vol/DD scale factor
-    (mirroring the paper's train/test split), the rest is scored OOS."""
     edge = compute_edge_signal(prices, drift_window, up_threshold, value_weight, reversal_lookback)
     weights = edge_to_weights(edge)
     raw_returns = backtest_returns(prices, weights, cost_bp)
@@ -211,9 +153,6 @@ def run_backtest(prices: pd.DataFrame, drift_window: int = 63, up_threshold: flo
 
 
 if __name__ == "__main__":
-    # Minimal synthetic demo so the script runs end-to-end without network
-    # access. Replace `prices` with real adjusted-close data (e.g. from
-    # yfinance) to actually test the strategy.
     np.random.seed(0)
     n_days, n_stocks = 1500, 200
     dates = pd.bdate_range("2018-01-01", periods=n_days)
