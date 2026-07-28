@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EDGE / ML-EDGE — strategy signal, in motion</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #060810; height: 100%; }
+  canvas { display: block; }
+  #overlay {
+    position: fixed; left: 24px; bottom: 22px; color: #cfd6e6;
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 11px;
+    letter-spacing: 0.04em; line-height: 1.7; opacity: 0; pointer-events: none;
+    transition: opacity 2.5s ease;
+    text-transform: uppercase;
+  }
+  #overlay .row { display: flex; gap: 10px; }
+  #overlay .k { color: #6b7386; min-width: 108px; display: inline-block; }
+  #overlay .gold { color: #d9b46a; }
+  #overlay .violet { color: #9b8cf2; }
+  #overlay .teal { color: #59d6c1; }
+  #overlay .coral { color: #e8748a; }
+  #title {
+    position: fixed; left: 24px; top: 22px; color: #e7ebf3;
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 12px;
+    letter-spacing: 0.12em; opacity: 0; transition: opacity 2.5s ease;
+    text-transform: uppercase; pointer-events: none;
+  }
+  #title span { color: #6b7386; letter-spacing: 0.04em; text-transform: none; display: block; margin-top: 4px; font-size: 10.5px; }
+  #warn {
+    position: fixed; right: 24px; top: 22px; max-width: 260px; text-align: right;
+    color: #e8748a; font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 10.5px;
+    letter-spacing: 0.02em; line-height: 1.6; opacity: 0; transition: opacity 2.5s ease;
+    text-transform: none; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="title">EDGE <span>value &middot; short reversal &middot; up-drift regime filter, vs. ML-walk-forward variant</span></div>
+<div id="warn">synthetic random-walk data &middot; ML fold Sharpes this high (up to 4.3, 85-99% train accuracy) signal overfitting, not real skill</div>
+<div id="overlay">
+  <div class="row"><span class="k">gold ribbon</span><span>EDGE baseline &middot; sharpe <span class="gold" id="v-sharpe">--</span> &middot; dd <span class="gold" id="v-dd">--</span></span></div>
+  <div class="row"><span class="k">violet ribbon</span><span>ML walk-forward OOS &middot; median sharpe <span class="violet" id="v-ml-sharpe">--</span></span></div>
+  <div class="row"><span class="k">violet rings</span><span id="v-nfolds">--</span> walk-forward folds, height = fold sharpe</div>
+  <div class="row"><span class="k">teal / coral</span><span><span class="teal">long</span> &middot; <span class="coral">short</span> positions, sized by weight</span></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const DATA = {"equity":[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.00609,1.00881,0.99687,0.97797,0.96864,0.96084,0.95982,0.98291,0.9826,0.97961,0.9667,0.98679,0.97813,0.95955,0.9593,0.9533,0.97581,0.97371,1.00563,1.00077,1.00596,1.02,1.04083,1.0251,1.01641,1.02029,1.02159,1.0306,1.05528,1.06188,1.05921,1.06425,1.06681,1.04285,1.05908,1.07095,1.08323,1.07445,1.07497,1.07216,1.07661,1.05051,1.05452,1.05848,1.05653,1.06474,1.05765,1.04951,1.06996,1.06933,1.09364,1.10111,1.11287,1.0861,1.06081,1.04984,1.05581,1.05572,1.06127,1.09341,1.09884,1.11944,1.12349,1.10373,1.09543,1.07416,1.07921,1.05647,1.01255,0.98807,1.00892,1.00431,1.00382,1.05017,1.03966,1.03643,1.07021,1.11663,1.13169,1.14639,1.16521,1.18187,1.1995,1.22029,1.21099,1.22774,1.26507,1.29479,1.32171,1.30276,1.3347,1.34098,1.33042,1.32613,1.34103,1.31803,1.33171,1.3273,1.33204,1.30604,1.29475,1.29989,1.33191,1.33847,1.33372,1.34865,1.37183,1.40943,1.3585,1.36626,1.3603,1.33667,1.39621,1.36032,1.36495,1.41114,1.42914,1.43638,1.44558,1.47235,1.47843,1.49901,1.4947,1.50901,1.49945,1.5191,1.53197,1.55923,1.58271,1.55814,1.58843,1.5632,1.59204,1.59169,1.59129,1.55755,1.54793,1.51642,1.51751,1.49741,1.50423,1.50093,1.51822,1.52652,1.50274,1.49848,1.51791,1.5132,1.46125,1.48276,1.54129,1.54456,1.54365,1.57252,1.60289,1.62845,1.61989,1.65179,1.66424,1.70304,1.69588,1.65922,1.66455,1.68797,1.67235,1.6944,1.68084,1.74765,1.7925,1.73461,1.71086,1.7373,1.69666,1.73325,1.7305,1.72771,1.76588,1.76845,1.70401,1.73312,1.6795,1.61973,1.61143,1.61986,1.58814,1.58548,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188],"long_exposure":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,0.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0],"short_exposure":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"turnover":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.6729,0.7955,0.5998,0.4869,0.6317,0.832,0.4691,0.6753,0.5613,0.5966,0.5042,0.7077,0.391,0.6177,0.3108,0.3478,0.5891,0.6366,0.7028,0.5511,0.6618,0.4292,0.822,1.0,0.4821,0.5383,0.4685,0.5216,0.6786,0.869,0.506,0.4877,0.5852,0.7046,0.4373,0.5492,0.6733,0.5478,0.5839,0.6058,0.2714,0.6385,0.4612,0.8643,0.3263,0.4074,0.716,0.4696,0.6654,0.7019,0.4033,0.8024,0.618,0.6615,0.4061,1.0,1.0,0.6075,0.4784,0.7501,0.7199,0.7495,0.7254,0.4561,0.7209,0.6006,0.692,0.6939,0.8617,0.4194,0.7532,0.7737,0.5616,0.579,0.4852,0.542,0.382,0.6476,0.4034,0.3631,0.372,0.4565,0.5874,0.6524,0.6779,0.3204,0.4657,0.5297,0.4722,0.4177,0.4854,0.5843,0.5798,0.6862,0.7581,0.3543,0.5829,0.6325,0.7115,0.5949,0.9561,0.7605,0.8826,0.6902,0.1927,0.5759,0.5447,0.6184,0.9472,0.4141,0.8481,0.5258,0.7479,1.184,0.6518,0.8235,0.4758,0.5829,0.3399,0.5586,0.4711,0.363,0.5429,0.9675,0.5183,0.5054,0.3758,0.4642,0.821,0.4678,0.8343,0.4302,0.8472,0.4135,0.7838,0.6331,0.8576,0.727,0.6665,0.5197,0.8419,0.5016,0.5893,0.3699,0.8181,0.3994,0.4055,0.5574,0.3561,0.4763,0.4876,0.4479,0.6591,0.5477,0.5157,0.4824,0.4442,0.4505,0.5345,0.3656,0.6752,0.4861,0.5275,0.4116,0.603,0.5365,0.5972,0.3253,0.623,0.7027,0.4746,0.6972,0.9453,0.6182,0.616,0.3901,0.6494,0.5316,0.4754,0.6233,0.9944,1.0,0.0,0.0,0.8488,0.0,0.0,0.0,0.4444,0.0,0.0,0.5989,0.6447,0.6356,0.5348,0.2586,0.4015,1.0,0.8777,0.591,0.6872,0.4756,0.4631,0.243,0.3664,0.8632,0.5575,0.463,0.4668,0.4014,0.4711,0.4452,0.9522,0.8278,0.4503,1.0,1.0,0.7329,0.5678,0.3348,0.7688,1.0539,0.4475,0.5636,0.5354,1.0,1.0919,0.5875,0.8211,0.7299,1.0,0.0,0.5995,0.0,0.3326,0.9093,1.0,1.0,0.1493,0.7176,0.6138,0.3846,0.3985,0.7878,0.6305,0.308,0.3854,0.6721,0.4638,0.3329,0.3723,0.7549,0.7011,1.054,1.0,0.4217,0.6586,0.6369,0.623,0.4346,0.4389,0.2787,0.506,0.5409,0.9057,0.6765,0.4942,0.4462,0.6065,0.7738,0.535,0.4151,0.5487,0.7224,0.7065,0.3816,0.4699,0.7126,0.7264,0.7705,0.4556,0.308,0.3669,0.453,0.36,0.4579],"n_active":[0,0,0,0,0,0,0,0,0,0,0,0,0,9,12,14,10,12,12,12,20,19,20,23,16,22,21,15,15,11,13,14,13,12,13,14,15,10,12,15,14,19,17,23,19,17,17,16,15,16,17,17,21,16,15,15,17,21,17,16,18,20,20,18,17,19,13,12,14,9,10,13,11,10,11,12,19,16,14,17,14,14,13,12,13,17,16,17,16,16,18,22,19,19,22,22,26,18,22,24,29,27,24,24,25,23,17,17,15,17,20,17,15,17,18,19,18,17,15,13,12,14,17,14,15,16,15,14,18,19,14,18,21,20,20,18,22,19,19,20,22,20,22,25,27,24,20,20,15,15,22,21,20,19,14,18,22,15,17,18,18,21,20,21,16,21,24,24,23,23,20,16,17,16,14,13,14,13,14,13,16,18,20,20,17,15,23,22,19,19,20,13,12,12,14,10,8,6,10,9,7,6,12,8,6,11,15,16,19,19,13,14,13,14,15,18,18,15,12,16,19,17,14,15,15,15,13,15,14,9,10,12,15,17,17,14,17,14,15,9,11,12,15,11,9,9,11,9,10,10,8,10,10,14,12,15,15,11,15,15,17,14,19,16,17,18,18,10,10,21,18,18,20,16,20,24,18,17,15,15,24,28,24,18,15,14,14,16,19,16,13,18,20,16,18,18,16,18,18,18],"particle_weights":[0.12495,0.1139,0.1983,0.02,0.0276,0.00116,0.00225,0.02126,0.09184,0.07278,0.01845,0.01493,0.06745,0.01123,0.01711,0.00329,0.14475,0.04875],"sharpe":0.20875341314229823,"max_dd":-0.12062889581423253,"ann_return":0.014229856862395751};
+const DATA_ML = {"equity":[1.0,1.00066,1.00085,1.00109,0.99778,0.99892,0.99637,1.00556,1.00532,1.00235,1.00433,1.01508,1.0197,1.01853,1.01489,1.00971,1.00578,1.00608,1.00672,1.00511,1.00332,1.00511,1.0075,1.01012,1.00935,1.00563,1.0086,1.00954,1.00745,1.00812,1.01478,1.0129,1.01235,1.01431,1.00908,1.01095,1.01095,1.01222,1.01352,1.01003,1.01169,1.01469,1.01222,1.01762,1.02115,1.02556,1.02669,1.02212,1.01678,1.01317,1.01506,1.01001,1.01091,1.01385,1.01269,1.0124,1.01207,1.008,1.01112,1.01514,1.01679,1.01367,1.01803,1.01431,1.01241,1.01282,1.01585,1.01361,1.01678,1.01328,1.0146,1.01291,1.01226,1.00805,1.01247,1.01167,1.0107,1.00906,1.01398,1.01597,1.01578,1.02176,1.0244,1.02424,1.02542,1.02842,1.02445,1.0265,1.03273,1.0364,1.03643,1.03539,1.04193,1.03973,1.04416,1.03767,1.0373,1.03694,1.0354,1.0343,1.0343,1.04055,1.04017,1.0474,1.04736,1.04437,1.04628,1.04698,1.05006,1.0507,1.05143,1.04919,1.05381,1.05727,1.05981,1.07065,1.08032,1.08262,1.08886,1.08667,1.08188,1.07822,1.08144,1.07462,1.07111,1.07065,1.07691,1.07734,1.07588,1.07443,1.07547,1.07277,1.07253,1.07142,1.07724,1.08381,1.08284,1.08156,1.07856,1.08332,1.08768,1.08272,1.08272,1.08272,1.08272,1.0829,1.08329,1.08211,1.08397,1.08451,1.08357,1.08943,1.09686,1.09687,1.09887,1.09823,1.10179,1.10176,1.10431,1.10674,1.10586,1.10905,1.11194,1.10771,1.10781,1.10938,1.11384,1.11675,1.11505,1.11728,1.11728,1.11843,1.1193,1.11738,1.1184,1.11286,1.11152,1.11195,1.11423,1.11851,1.11604,1.11998,1.11766,1.11723,1.11723,1.11723,1.11723,1.11813,1.11714,1.11893,1.12254,1.1246,1.12743,1.12323,1.1238,1.12547,1.13753,1.13906,1.14821,1.15112,1.15045,1.15172,1.14981,1.14827,1.14897,1.1475,1.1481,1.1503,1.14786,1.14567,1.14058,1.13671,1.1408,1.14074,1.13588,1.13453,1.13889,1.13833,1.13374,1.13,1.13219,1.13355,1.13758,1.13554,1.13443,1.13443,1.13704,1.1401,1.13698,1.14006,1.13624,1.13012,1.1334,1.13407,1.13882,1.13844,1.14194,1.14409,1.14312,1.14586,1.14787,1.14787,1.15483,1.16443,1.16195,1.16236,1.15919,1.16002,1.16082,1.16003,1.16206,1.16453,1.16291,1.16055,1.16053,1.16019,1.15992,1.15968,1.15557,1.15569,1.15014,1.15193,1.16148,1.16102,1.16037,1.16037,1.15924,1.16057,1.16715,1.16845,1.17066,1.16878,1.16875,1.17096,1.1634,1.16546,1.15827,1.15824,1.16333,1.16329],"folds":[{"sharpe":0.6375,"ann_return":0.0151,"max_dd":-0.0187},{"sharpe":0.583,"ann_return":0.0127,"max_dd":-0.0156},{"sharpe":1.1155,"ann_return":0.024,"max_dd":-0.0168},{"sharpe":2.7726,"ann_return":0.073,"max_dd":-0.0104},{"sharpe":3.1149,"ann_return":0.0712,"max_dd":-0.0093},{"sharpe":2.3565,"ann_return":0.0576,"max_dd":-0.0177},{"sharpe":3.1148,"ann_return":0.074,"max_dd":-0.0093},{"sharpe":1.9155,"ann_return":0.0406,"max_dd":-0.0225},{"sharpe":0.4464,"ann_return":0.0098,"max_dd":-0.0133},{"sharpe":0.6621,"ann_return":0.0135,"max_dd":-0.0141},{"sharpe":4.2912,"ann_return":0.0969,"max_dd":-0.0065},{"sharpe":2.4181,"ann_return":0.0566,"max_dd":-0.0195},{"sharpe":2.2301,"ann_return":0.0477,"max_dd":-0.0091},{"sharpe":1.1868,"ann_return":0.0283,"max_dd":-0.0331},{"sharpe":-0.3736,"ann_return":-0.0083,"max_dd":-0.0229},{"sharpe":0.5636,"ann_return":0.0113,"max_dd":-0.0156}],"avg_sharpe":1.6896878313477137,"median_sharpe":1.551152062051326,"std_sharpe":1.2339727345442058,"n_folds":16};
+
+document.getElementById('v-sharpe').textContent = DATA.sharpe.toFixed(2);
+document.getElementById('v-dd').textContent = (DATA.max_dd*100).toFixed(1) + '%';
+document.getElementById('v-ml-sharpe').textContent = DATA_ML.median_sharpe.toFixed(2);
+document.getElementById('v-nfolds').textContent = DATA_ML.n_folds;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x060810, 0.022);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 500);
+camera.position.set(0, 6, 42);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x060810, 1);
+document.body.appendChild(renderer.domElement);
+
+const world = new THREE.Group();
+scene.add(world);
+
+function glowTexture(hex) {
+  const size = 128;
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  const col = new THREE.Color(hex);
+  const r = Math.floor(col.r*255), gg = Math.floor(col.g*255), b = Math.floor(col.b*255);
+  g.addColorStop(0, `rgba(${r},${gg},${b},1)`);
+  g.addColorStop(0.35, `rgba(${r},${gg},${b},0.55)`);
+  g.addColorStop(1, `rgba(${r},${gg},${b},0)`);
+  ctx.fillStyle = g; ctx.fillRect(0,0,size,size);
+  return new THREE.CanvasTexture(c);
+}
+
+const GOLD = 0xd9b46a, VIOLET = 0x9b8cf2, TEAL = 0x59d6c1, CORAL = 0xe8748a, DIM = 0x2a3348;
+const up = new THREE.Vector3(0, 1, 0);
+
+function buildRibbon(eq, turn, opts) {
+  const N = eq.length;
+  const eqMin = Math.min(...eq), eqMax = Math.max(...eq);
+  const baseColor = new THREE.Color(opts.baseColor);
+  const badColor = new THREE.Color(opts.badColor);
+
+  const pathPts = [];
+  for (let i = 0; i < N; i++) {
+    const x = (i / (N - 1) - 0.5) * opts.width;
+    const y = ((eq[i] - 1) / Math.max(eqMax - 1, 1 - eqMin, 0.05)) * opts.yscale + opts.yOffset;
+    const z = Math.sin(i * 0.18 + opts.zPhase) * opts.zwave * (0.4 + (turn ? turn[i] : 0.3)) + opts.zOffset;
+    pathPts.push(new THREE.Vector3(x, y, z));
+  }
+  const curve = new THREE.CatmullRomCurve3(pathPts);
+  const curvePts = curve.getPoints(N * 3);
+
+  const geo = new THREE.BufferGeometry();
+  const positions = [], colors = [], indices = [];
+
+  for (let i = 0; i < curvePts.length; i++) {
+    const t = i / (curvePts.length - 1);
+    const srcIdx = Math.min(N - 1, Math.floor(t * (N - 1)));
+    const tangent = curve.getTangentAt(t);
+    const side = new THREE.Vector3().crossVectors(tangent, up).normalize();
+    const halfW = opts.strandHalfWidth + (turn ? turn[srcIdx] * 0.5 : 0.15);
+    const p = curvePts[i];
+    const a = new THREE.Vector3().copy(p).addScaledVector(side, halfW);
+    const b = new THREE.Vector3().copy(p).addScaledVector(side, -halfW);
+    positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+
+    const runningMax = Math.max(...eq.slice(0, srcIdx + 1));
+    const drawdown = runningMax > 0 ? Math.min(1, Math.max(0, 1 - eq[srcIdx] / runningMax)) : 0;
+    const col = baseColor.clone().lerp(badColor, Math.min(1, drawdown * 3.2));
+    colors.push(col.r, col.g, col.b, col.r, col.g, col.b);
+
+    if (i > 0) {
+      const base = (i - 1) * 2;
+      indices.push(base, base+1, base+2, base+1, base+3, base+2);
+    }
+  }
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+
+  const mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: opts.opacity });
+  const mesh = new THREE.Mesh(geo, mat);
+
+  const underGeo = geo.clone();
+  const underMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: opts.opacity * 0.16 });
+  const under = new THREE.Mesh(underGeo, underMat);
+  under.position.y = -0.3;
+
+  const trailGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
+  const trailMat = new THREE.LineBasicMaterial({ color: opts.baseColor, transparent: true, opacity: 0.22 });
+  const trail = new THREE.Line(trailGeo, trailMat);
+
+  return { mesh, under, trail };
+}
+
+const baseline = buildRibbon(DATA.equity, DATA.turnover, {
+  width: 46, yscale: 13, zwave: 3.6, zPhase: 0, zOffset: -6, yOffset: 0,
+  strandHalfWidth: 0.28, baseColor: GOLD, badColor: CORAL, opacity: 0.92
+});
+world.add(baseline.mesh, baseline.under, baseline.trail);
+
+const mlRibbon = buildRibbon(DATA_ML.equity, null, {
+  width: 46, yscale: 26, zwave: 2.4, zPhase: 1.7, zOffset: 7, yOffset: -3,
+  strandHalfWidth: 0.22, baseColor: VIOLET, badColor: CORAL, opacity: 0.85
+});
+world.add(mlRibbon.mesh, mlRibbon.under, mlRibbon.trail);
+
+const pw = DATA.particle_weights;
+const maxW = Math.max(...pw.map(Math.abs));
+const particles = [];
+const glowTex = glowTexture(0xffffff);
+
+pw.forEach((w, i) => {
+  const isLong = w >= 0;
+  const color = isLong ? TEAL : CORAL;
+  const mag = Math.abs(w) / maxW;
+  const spriteMat = new THREE.SpriteMaterial({
+    map: glowTex, color, transparent: true, opacity: 0.85 + 0.15*mag,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const sprite = new THREE.Sprite(spriteMat);
+  const size = 1.0 + mag * 3.2;
+  sprite.scale.set(size, size, 1);
+
+  const radius = 9 + (i % 6) * 2.4;
+  const speed = 0.05 + (i % 5) * 0.018;
+  const phase = (i / pw.length) * Math.PI * 2;
+  const yOff = -6 + (i % 7) * 2.1;
+
+  particles.push({ sprite, radius, speed, phase, yOff, zOffset: -6 });
+  world.add(sprite);
+
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.16 + mag*0.22, 12, 12),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 })
+  );
+  particles[particles.length-1].core = core;
+  world.add(core);
+});
+
+const foldGroup = new THREE.Group();
+world.add(foldGroup);
+const folds = DATA_ML.folds;
+const maxAbsSharpe = Math.max(...folds.map(f => Math.abs(f.sharpe)), 1);
+const foldNodes = [];
+
+folds.forEach((f, i) => {
+  const isGood = f.sharpe >= 0;
+  const color = isGood ? VIOLET : CORAL;
+  const mag = Math.abs(f.sharpe) / maxAbsSharpe;
+  const ang = (i / folds.length) * Math.PI * 2;
+  const radius = 20;
+  const height = f.sharpe / maxAbsSharpe * 8;
+
+  const spriteMat = new THREE.SpriteMaterial({
+    map: glowTex, color, transparent: true, opacity: 0.55 + 0.35*mag,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const sprite = new THREE.Sprite(spriteMat);
+  const size = 0.9 + mag * 2.6;
+  sprite.scale.set(size, size, 1);
+  foldNodes.push({ sprite, ang, radius, height, phase: ang, speed: 0.035, zOffset: 7 });
+  foldGroup.add(sprite);
+});
+
+function makeStars(count, spread, size, color, opacity) {
+  const geo = new THREE.BufferGeometry();
+  const pos = [];
+  for (let i = 0; i < count; i++) {
+    pos.push((Math.random()-0.5)*spread, (Math.random()-0.5)*spread*0.6, (Math.random()-0.5)*spread);
+  }
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({ color, size, transparent: true, opacity, sizeAttenuation: true });
+  return new THREE.Points(geo, mat);
+}
+const starsFar = makeStars(500, 260, 0.5, 0x8891ab, 0.5);
+const starsNear = makeStars(150, 140, 0.9, DIM, 0.6);
+scene.add(starsFar, starsNear);
+
+let t0 = performance.now();
+let worldRotY = 0.28, worldRotX = -0.1;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = (performance.now() - t0) / 1000;
+
+  world.rotation.y = worldRotY + t * 0.075;
+  world.rotation.x = worldRotX + Math.sin(t * 0.07) * 0.07;
+  world.position.y = Math.sin(t * 0.2) * 0.6;
+
+  particles.forEach(p => {
+    const ang = p.phase + t * p.speed;
+    const x = Math.cos(ang) * p.radius;
+    const z = Math.sin(ang) * p.radius + Math.sin(t*0.3+p.phase)*1.5 + p.zOffset;
+    const y = p.yOff + Math.sin(t * 0.6 + p.phase) * 1.2;
+    p.sprite.position.set(x, y, z);
+    p.core.position.set(x, y, z);
+    const pulse = 1 + Math.sin(t * 1.6 + p.phase) * 0.12;
+    p.core.scale.setScalar(pulse);
+  });
+
+  foldNodes.forEach(f => {
+    const ang = f.ang + t * f.speed;
+    const x = Math.cos(ang) * f.radius;
+    const z = Math.sin(ang) * f.radius + f.zOffset;
+    const y = f.height + Math.sin(t * 0.8 + f.phase) * 0.5;
+    f.sprite.position.set(x, y, z);
+    const pulse = 1 + Math.sin(t * 1.2 + f.phase) * 0.15;
+    if (!f.baseScale) f.baseScale = f.sprite.scale.x;
+    f.sprite.scale.set(f.baseScale * pulse, f.baseScale * pulse, 1);
+  });
+
+  starsFar.rotation.y = t * 0.008;
+  starsNear.rotation.y = -t * 0.013;
+
+  camera.position.x = Math.sin(t * 0.045) * 4;
+  camera.lookAt(0, 0, 0);
+
+  renderer.render(scene, camera);
+}
+animate();
+
+setTimeout(() => {
+  document.getElementById('overlay').style.opacity = 1;
+  document.getElementById('title').style.opacity = 1;
+  document.getElementById('warn').style.opacity = 1;
+}, 900);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
