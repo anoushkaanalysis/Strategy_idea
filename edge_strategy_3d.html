@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EDGE — strategy signal, in motion</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #060810; height: 100%; }
+  canvas { display: block; }
+  #overlay {
+    position: fixed; left: 24px; bottom: 22px; color: #cfd6e6;
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 11px;
+    letter-spacing: 0.04em; line-height: 1.7; opacity: 0; pointer-events: none;
+    transition: opacity 2.5s ease;
+    text-transform: uppercase;
+  }
+  #overlay .row { display: flex; gap: 10px; }
+  #overlay .k { color: #6b7386; min-width: 88px; display: inline-block; }
+  #overlay .gold { color: #d9b46a; }
+  #overlay .teal { color: #59d6c1; }
+  #overlay .coral { color: #e8748a; }
+  #title {
+    position: fixed; left: 24px; top: 22px; color: #e7ebf3;
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 12px;
+    letter-spacing: 0.12em; opacity: 0; transition: opacity 2.5s ease;
+    text-transform: uppercase; pointer-events: none;
+  }
+  #title span { color: #6b7386; letter-spacing: 0.04em; text-transform: none; display: block; margin-top: 4px; font-size: 10.5px; }
+</style>
+</head>
+<body>
+
+<div id="title">EDGE <span>value &middot; short reversal &middot; up-drift regime filter — synthetic backtest</span></div>
+<div id="overlay">
+  <div class="row"><span class="k">sharpe</span><span class="gold" id="v-sharpe">--</span></div>
+  <div class="row"><span class="k">ann. return</span><span class="gold" id="v-ret">--</span></div>
+  <div class="row"><span class="k">max drawdown</span><span class="coral" id="v-dd">--</span></div>
+  <div class="row"><span class="k">gold ribbon</span><span>cumulative equity</span></div>
+  <div class="row"><span class="k">teal / coral</span><span><span class="teal">long</span> &middot; <span class="coral">short</span> positions, sized by weight</span></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/128/three.min.js"></script>
+<script>
+const DATA = {"equity": [1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.00609,1.00881,0.99687,0.97797,0.96864,0.96084,0.95982,0.98291,0.9826,0.97961,0.9667,0.98679,0.97813,0.95955,0.9593,0.9533,0.97581,0.97371,1.00563,1.00077,1.00596,1.02,1.04083,1.0251,1.01641,1.02029,1.02159,1.0306,1.05528,1.06188,1.05921,1.06425,1.06681,1.04285,1.05908,1.07095,1.08323,1.07445,1.07497,1.07216,1.07661,1.05051,1.05452,1.05848,1.05653,1.06474,1.05765,1.04951,1.06996,1.06933,1.09364,1.10111,1.11287,1.0861,1.06081,1.04984,1.05581,1.05572,1.06127,1.09341,1.09884,1.11944,1.12349,1.10373,1.09543,1.07416,1.07921,1.05647,1.01255,0.98807,1.00892,1.00431,1.00382,1.05017,1.03966,1.03643,1.07021,1.11663,1.13169,1.14639,1.16521,1.18187,1.1995,1.22029,1.21099,1.22774,1.26507,1.29479,1.32171,1.30276,1.3347,1.34098,1.33042,1.32613,1.34103,1.31803,1.33171,1.3273,1.33204,1.30604,1.29475,1.29989,1.33191,1.33847,1.33372,1.34865,1.37183,1.40943,1.3585,1.36626,1.3603,1.33667,1.39621,1.36032,1.36495,1.41114,1.42914,1.43638,1.44558,1.47235,1.47843,1.49901,1.4947,1.50901,1.49945,1.5191,1.53197,1.55923,1.58271,1.55814,1.58843,1.5632,1.59204,1.59169,1.59129,1.55755,1.54793,1.51642,1.51751,1.49741,1.50423,1.50093,1.51822,1.52652,1.50274,1.49848,1.51791,1.5132,1.46125,1.48276,1.54129,1.54456,1.54365,1.57252,1.60289,1.62845,1.61989,1.65179,1.66424,1.70304,1.69588,1.65922,1.66455,1.68797,1.67235,1.6944,1.68084,1.74765,1.7925,1.73461,1.71086,1.7373,1.69666,1.73325,1.7305,1.72771,1.76588,1.76845,1.70401,1.73312,1.6795,1.61973,1.61143,1.61986,1.58814,1.58548,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188,1.58188],"long_exposure": [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0,0.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,0.0,0.0,1.0,0.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0],"short_exposure": [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"turnover": [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.6729,0.7955,0.5998,0.4869,0.6317,0.832,0.4691,0.6753,0.5613,0.5966,0.5042,0.7077,0.391,0.6177,0.3108,0.3478,0.5891,0.6366,0.7028,0.5511,0.6618,0.4292,0.822,1.0,0.4821,0.5383,0.4685,0.5216,0.6786,0.869,0.506,0.4877,0.5852,0.7046,0.4373,0.5492,0.6733,0.5478,0.5839,0.6058,0.2714,0.6385,0.4612,0.8643,0.3263,0.4074,0.716,0.4696,0.6654,0.7019,0.4033,0.8024,0.618,0.6615,0.4061,1.0,1.0,0.6075,0.4784,0.7501,0.7199,0.7495,0.7254,0.4561,0.7209,0.6006,0.692,0.6939,0.8617,0.4194,0.7532,0.7737,0.5616,0.579,0.4852,0.542,0.382,0.6476,0.4034,0.3631,0.372,0.4565,0.5874,0.6524,0.6779,0.3204,0.4657,0.5297,0.4722,0.4177,0.4854,0.5843,0.5798,0.6862,0.7581,0.3543,0.5829,0.6325,0.7115,0.5949,0.9561,0.7605,0.8826,0.6902,0.1927,0.5759,0.5447,0.6184,0.9472,0.4141,0.8481,0.5258,0.7479,1.184,0.6518,0.8235,0.4758,0.5829,0.3399,0.5586,0.4711,0.363,0.5429,0.9675,0.5183,0.5054,0.3758,0.4642,0.821,0.4678,0.8343,0.4302,0.8472,0.4135,0.7838,0.6331,0.8576,0.727,0.6665,0.5197,0.8419,0.5016,0.5893,0.3699,0.8181,0.3994,0.4055,0.5574,0.3561,0.4763,0.4876,0.4479,0.6591,0.5477,0.5157,0.4824,0.4442,0.4505,0.5345,0.3656,0.6752,0.4861,0.5275,0.4116,0.603,0.5365,0.5972,0.3253,0.623,0.7027,0.4746,0.6972,0.9453,0.6182,0.616,0.3901,0.6494,0.5316,0.4754,0.6233,0.9944,1.0,0.0,0.0,0.8488,0.0,0.0,0.0,0.4444,0.0,0.0,0.5989,0.6447,0.6356,0.5348,0.2586,0.4015,1.0,0.8777,0.591,0.6872,0.4756,0.4631,0.243,0.3664,0.8632,0.5575,0.463,0.4668,0.4014,0.4711,0.4452,0.9522,0.8278,0.4503,1.0,1.0,0.7329,0.5678,0.3348,0.7688,1.0539,0.4475,0.5636,0.5354,1.0,1.0919,0.5875,0.8211,0.7299,1.0,0.0,0.5995,0.0,0.3326,0.9093,1.0,1.0,0.1493,0.7176,0.6138,0.3846,0.3985,0.7878,0.6305,0.308,0.3854,0.6721,0.4638,0.3329,0.3723,0.7549,0.7011,1.054,1.0,0.4217,0.6586,0.6369,0.623,0.4346,0.4389,0.2787,0.506,0.5409,0.9057,0.6765,0.4942,0.4462,0.6065,0.7738,0.535,0.4151,0.5487,0.7224,0.7065,0.3816,0.4699,0.7126,0.7264,0.7705,0.4556,0.308,0.3669,0.453,0.36,0.4579],"n_active": [0,0,0,0,0,0,0,0,0,0,0,0,0,9,12,14,10,12,12,12,20,19,20,23,16,22,21,15,15,11,13,14,13,12,13,14,15,10,12,15,14,19,17,23,19,17,17,16,15,16,17,17,21,16,15,15,17,21,17,16,18,20,20,18,17,19,13,12,14,9,10,13,11,10,11,12,19,16,14,17,14,14,13,12,13,17,16,17,16,16,18,22,19,19,22,22,26,18,22,24,29,27,24,24,25,23,17,17,15,17,20,17,15,17,18,19,18,17,15,13,12,14,17,14,15,16,15,14,18,19,14,18,21,20,20,18,22,19,19,20,22,20,22,25,27,24,20,20,15,15,22,21,20,19,14,18,22,15,17,18,18,21,20,21,16,21,24,24,23,23,20,16,17,16,14,13,14,13,14,13,16,18,20,20,17,15,23,22,19,19,20,13,12,12,14,10,8,6,10,9,7,6,12,8,6,11,15,16,19,19,13,14,13,14,15,18,18,15,12,16,19,17,14,15,15,15,13,15,14,9,10,12,15,17,17,14,17,14,15,9,11,12,15,11,9,9,11,9,10,10,8,10,10,14,12,15,15,11,15,15,17,14,19,16,17,18,18,10,10,21,18,18,20,16,20,24,18,17,15,15,24,28,24,18,15,14,14,16,19,16,13,18,20,16,18,18,16,18,18,18],"particle_weights": [0.12495,0.1139,0.1983,0.02,0.0276,0.00116,0.00225,0.02126,0.09184,0.07278,0.01845,0.01493,0.06745,0.01123,0.01711,0.00329,0.14475,0.04875],"sharpe": 0.20875341314229823,"max_dd": -0.12062889581423253,"ann_return": 0.014229856862395751};
+
+document.getElementById('v-sharpe').textContent = DATA.sharpe.toFixed(2);
+document.getElementById('v-ret').textContent = (DATA.ann_return*100).toFixed(1) + '%';
+document.getElementById('v-dd').textContent = (DATA.max_dd*100).toFixed(1) + '%';
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x060810, 0.028);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 500);
+camera.position.set(0, 4, 34);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x060810, 1);
+document.body.appendChild(renderer.domElement);
+
+const world = new THREE.Group();
+scene.add(world);
+
+function glowTexture(hex) {
+  const size = 128;
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  const col = new THREE.Color(hex);
+  const r = Math.floor(col.r*255), gg = Math.floor(col.g*255), b = Math.floor(col.b*255);
+  g.addColorStop(0, `rgba(${r},${gg},${b},1)`);
+  g.addColorStop(0.35, `rgba(${r},${gg},${b},0.55)`);
+  g.addColorStop(1, `rgba(${r},${gg},${b},0)`);
+  ctx.fillStyle = g; ctx.fillRect(0,0,size,size);
+  return new THREE.CanvasTexture(c);
+}
+
+const GOLD = 0xd9b46a, TEAL = 0x59d6c1, CORAL = 0xe8748a, DIM = 0x2a3348;
+
+const eq = DATA.equity, turn = DATA.turnover, nact = DATA.n_active;
+const N = eq.length;
+const WIDTH = 46, YSCALE = 13, ZWAVE = 3.6;
+const eqMin = Math.min(...eq), eqMax = Math.max(...eq);
+
+const pathPts = [];
+for (let i = 0; i < N; i++) {
+  const x = (i / (N - 1) - 0.5) * WIDTH;
+  const y = ((eq[i] - 1) / Math.max(eqMax - 1, 1 - eqMin, 0.05)) * YSCALE;
+  const z = Math.sin(i * 0.18) * ZWAVE * (0.4 + turn[i]);
+  pathPts.push(new THREE.Vector3(x, y, z));
+}
+const curve = new THREE.CatmullRomCurve3(pathPts);
+const curvePts = curve.getPoints(N * 3);
+
+const ribbonGeo = new THREE.BufferGeometry();
+const positions = [], colors = [], indices = [];
+const up = new THREE.Vector3(0, 1, 0);
+const goldC = new THREE.Color(GOLD), coralC = new THREE.Color(CORAL), dimC = new THREE.Color(DIM);
+
+for (let i = 0; i < curvePts.length; i++) {
+  const t = i / (curvePts.length - 1);
+  const srcIdx = Math.min(N - 1, Math.floor(t * (N - 1)));
+  const tangent = curve.getTangentAt(t);
+  const side = new THREE.Vector3().crossVectors(tangent, up).normalize();
+  const halfW = 0.28 + turn[srcIdx] * 0.5;
+  const p = curvePts[i];
+  const a = new THREE.Vector3().copy(p).addScaledVector(side, halfW);
+  const b = new THREE.Vector3().copy(p).addScaledVector(side, -halfW);
+  positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+
+  const drawdown = (eqMax > 0) ? Math.min(1, Math.max(0, 1 - eq[srcIdx] / Math.max(...eq.slice(0, srcIdx + 1)))) : 0;
+  const col = goldC.clone().lerp(coralC, Math.min(1, drawdown * 3.2));
+  colors.push(col.r, col.g, col.b, col.r, col.g, col.b);
+
+  if (i > 0) {
+    const base = (i - 1) * 2;
+    indices.push(base, base+1, base+2, base+1, base+3, base+2);
+  }
+}
+ribbonGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+ribbonGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+ribbonGeo.setIndex(indices);
+ribbonGeo.computeVertexNormals();
+
+const ribbonMat = new THREE.MeshBasicMaterial({
+  vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.92
+});
+const ribbon = new THREE.Mesh(ribbonGeo, ribbonMat);
+world.add(ribbon);
+
+const underGeo = ribbonGeo.clone();
+const underMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.14 });
+const underRibbon = new THREE.Mesh(underGeo, underMat);
+underRibbon.scale.set(1, 1, 1);
+underRibbon.position.y = -0.3;
+world.add(underRibbon);
+
+const trailGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
+const trailMat = new THREE.LineBasicMaterial({ color: GOLD, transparent: true, opacity: 0.25 });
+world.add(new THREE.Line(trailGeo, trailMat));
+
+const pw = DATA.particle_weights;
+const maxW = Math.max(...pw.map(Math.abs));
+const particles = [];
+const glowTex = glowTexture(0xffffff);
+
+pw.forEach((w, i) => {
+  const isLong = w >= 0;
+  const color = isLong ? TEAL : CORAL;
+  const mag = Math.abs(w) / maxW;
+  const spriteMat = new THREE.SpriteMaterial({
+    map: glowTex, color, transparent: true, opacity: 0.85 + 0.15*mag,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const sprite = new THREE.Sprite(spriteMat);
+  const size = 1.0 + mag * 3.2;
+  sprite.scale.set(size, size, 1);
+
+  const radius = 9 + (i % 6) * 2.4;
+  const speed = 0.05 + (i % 5) * 0.018;
+  const phase = (i / pw.length) * Math.PI * 2;
+  const yOff = -6 + (i % 7) * 2.1;
+  const tilt = (i % 3) * 0.35;
+
+  particles.push({ sprite, radius, speed, phase, yOff, tilt });
+  world.add(sprite);
+
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.16 + mag*0.22, 12, 12),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 })
+  );
+  particles[particles.length-1].core = core;
+  world.add(core);
+});
+
+function makeStars(count, spread, size, color, opacity) {
+  const geo = new THREE.BufferGeometry();
+  const pos = [];
+  for (let i = 0; i < count; i++) {
+    pos.push((Math.random()-0.5)*spread, (Math.random()-0.5)*spread*0.6, (Math.random()-0.5)*spread);
+  }
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({ color, size, transparent: true, opacity, sizeAttenuation: true });
+  return new THREE.Points(geo, mat);
+}
+const starsFar = makeStars(500, 220, 0.5, 0x8891ab, 0.5);
+const starsNear = makeStars(150, 120, 0.9, DIM, 0.6);
+scene.add(starsFar, starsNear);
+
+let t0 = performance.now();
+let worldRotY = 0.28, worldRotX = -0.12;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = (performance.now() - t0) / 1000;
+
+  world.rotation.y = worldRotY + t * 0.09;
+  world.rotation.x = worldRotX + Math.sin(t * 0.08) * 0.08;
+  world.position.y = Math.sin(t * 0.22) * 0.6;
+
+  particles.forEach(p => {
+    const ang = p.phase + t * p.speed;
+    const x = Math.cos(ang) * p.radius;
+    const z = Math.sin(ang) * p.radius + Math.sin(t*0.3+p.phase)*1.5;
+    const y = p.yOff + Math.sin(t * 0.6 + p.phase) * 1.2;
+    p.sprite.position.set(x, y, z);
+    p.core.position.set(x, y, z);
+    const pulse = 1 + Math.sin(t * 1.6 + p.phase) * 0.12;
+    p.sprite.scale.set(p.sprite.scale.x, p.sprite.scale.x, 1);
+    p.core.scale.setScalar(pulse);
+  });
+
+  starsFar.rotation.y = t * 0.01;
+  starsNear.rotation.y = -t * 0.015;
+
+  camera.position.x = Math.sin(t * 0.05) * 3;
+  camera.lookAt(0, 1, 0);
+
+  renderer.render(scene, camera);
+}
+animate();
+
+setTimeout(() => {
+  document.getElementById('overlay').style.opacity = 1;
+  document.getElementById('title').style.opacity = 1;
+}, 900);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
