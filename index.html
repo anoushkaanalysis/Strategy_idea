@@ -1,1 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quant Strategy Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0a0b0d;
+    --panel: #131519;
+    --panel-hover: #17191e;
+    --border: #24272d;
+    --border-hover: #3a3d33;
+    --text: #e8e6e1;
+    --text-muted: #83878f;
+    --text-faint: #4c4f56;
+    --amber: #ffb020;
+    --amber-dim: #8a6218;
+    --cyan: #59d6c8;
+    --red: #ff6b5e;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  }
 
+  *{ box-sizing:border-box; margin:0; padding:0; }
+
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(circle at 15% 0%, rgba(255,176,32,0.05), transparent 40%),
+      radial-gradient(circle at 85% 20%, rgba(89,214,200,0.04), transparent 40%);
+  }
+
+  a{ color:inherit; text-decoration:none; }
+
+  /* ---------- TICKER ---------- */
+  .ticker-wrap{
+    width:100%;
+    overflow:hidden;
+    background: #000;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .ticker{
+    display:inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    padding: 8px 0;
+    animation: scroll 34s linear infinite;
+  }
+  .ticker span{ padding: 0 22px; color: var(--text-muted); }
+  .ticker span.up{ color: var(--cyan); }
+  .ticker span.down{ color: var(--red); }
+  @keyframes scroll{
+    0%{ transform: translateX(0); }
+    100%{ transform: translateX(-50%); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .ticker{ animation: none; }
+  }
+
+  /* ---------- HEADER ---------- */
+  header{
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 72px 24px 48px;
+    border-bottom: 1px solid var(--border);
+  }
+  .eyebrow{
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--amber);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .eyebrow::before{
+    content:"";
+    width: 7px; height:7px;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 8px 1px var(--amber);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  h1{
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: clamp(30px, 5vw, 48px);
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+    max-width: 760px;
+  }
+  h1 .dim{ color: var(--text-faint); }
+
+  header p{
+    margin-top: 18px;
+    max-width: 560px;
+    color: var(--text-muted);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  .repo-path{
+    margin-top: 28px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text-faint);
+    display:flex;
+    align-items:center;
+    gap: 8px;
+  }
+  .repo-path .sep{ color: var(--border-hover); }
+
+  /* ---------- MAIN ---------- */
+  main{
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 8px 24px 96px;
+  }
+
+  .module{
+    margin-top: 56px;
+  }
+  .module-head{
+    display:flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .module-index{
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--amber);
+    background: rgba(255,176,32,0.08);
+    border: 1px solid var(--amber-dim);
+    border-radius: 3px;
+    padding: 2px 7px;
+  }
+  .module-head h2{
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: 0.01em;
+  }
+  .module-head .count{
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  @media (max-width: 680px){
+    .grid{ grid-template-columns: 1fr; }
+  }
+
+  .card{
+    display:block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 18px;
+    transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before{
+    content:"";
+    position:absolute;
+    left:0; top:0; bottom:0;
+    width: 2px;
+    background: var(--amber);
+    transform: scaleY(0);
+    transform-origin: top;
+    transition: transform 0.18s ease;
+  }
+  .card:hover{
+    background: var(--panel-hover);
+    border-color: var(--border-hover);
+    transform: translateX(2px);
+  }
+  .card:hover::before{ transform: scaleY(1); }
+  .card:focus-visible{
+    outline: 2px solid var(--amber);
+    outline-offset: 2px;
+  }
+
+  .card-top{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .card-name{
+    font-family: var(--mono);
+    font-size: 13.5px;
+    color: var(--text);
+  }
+  .card-name .prompt{ color: var(--amber); margin-right: 7px; }
+  .card-ext{
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-faint);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    flex-shrink: 0;
+  }
+  .card-ext.html{ color: var(--cyan); border-color: rgba(89,214,200,0.3); }
+
+  .card-desc{
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.55;
+    max-width: 46ch;
+  }
+
+  /* ---------- FOOTER ---------- */
+  footer{
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 32px 24px 60px;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--text-faint);
+    display:flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="ticker-wrap">
+    <div class="ticker">
+      <span class="up">SHARPE 2.14 ▲</span>
+      <span>CAGR 18.3%</span>
+      <span class="down">MAX DD −9.2%</span>
+      <span>WIN RATE 57%</span>
+      <span class="up">SORTINO 2.86 ▲</span>
+      <span>BETA 0.41</span>
+      <span class="down">VOL 11.4% ▼</span>
+      <span>ALPHA 6.7%</span>
+      <span class="up">SHARPE 2.14 ▲</span>
+      <span>CAGR 18.3%</span>
+      <span class="down">MAX DD −9.2%</span>
+      <span>WIN RATE 57%</span>
+      <span class="up">SORTINO 2.86 ▲</span>
+      <span>BETA 0.41</span>
+      <span class="down">VOL 11.4% ▼</span>
+      <span>ALPHA 6.7%</span>
+    </div>
+  </div>
+
+  <header>
+    <div class="eyebrow">Live Repository · Research Desk</div>
+    <h1>Quant Strategy Lab<br><span class="dim">/ signal, risk, and backtest workbench</span></h1>
+    <p>Every model, filter, and diagnostic behind the strategy lives here — from the first written hypothesis to the ensemble that trades it. Pick a file below to open it.</p>
+    <div class="repo-path">~/quant-strategy-lab <span class="sep">›</span> main <span class="sep">›</span> 17 files</div>
+  </header>
+
+  <main>
+
+    <div class="module">
+      <div class="module-head">
+        <span class="module-index">01</span>
+        <h2>Interactive Visualizations</h2>
+        <span class="count">2 files</span>
+      </div>
+      <div class="grid">
+        <a class="card" href="3d_visualisation_ml.html">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">▸</span>3d_visualisation_ml.html</span>
+            <span class="card-ext html">HTML</span>
+          </div>
+          <div class="card-desc">Rotate through the ML model's decision surface across feature space.</div>
+        </a>
+        <a class="card" href="edge_strategy_3d.html">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">▸</span>edge_strategy_3d.html</span>
+            <span class="card-ext html">HTML</span>
+          </div>
+          <div class="card-desc">Explore strategy edge and drawdown across two parameter dimensions.</div>
+        </a>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head">
+        <span class="module-index">02</span>
+        <h2>Strategy Development</h2>
+        <span class="count">5 files</span>
+      </div>
+      <div class="grid">
+        <a class="card" href="strategy_idea.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>strategy_idea.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">Where each strategy starts — the raw hypothesis before it's coded.</div>
+        </a>
+        <a class="card" href="strategy_main">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>strategy_main</span>
+            <span class="card-ext">BIN</span>
+          </div>
+          <div class="card-desc">Entry point. Runs the active strategy end-to-end.</div>
+        </a>
+        <a class="card" href="ensemble_strategy.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>ensemble_strategy.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">Blends multiple signals into a single ensemble allocation.</div>
+        </a>
+        <a class="card" href="ml_strategy_v2.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>ml_strategy_v2.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">Second-generation ML signal generator.</div>
+        </a>
+        <a class="card" href="ml_enhanced_strategy_initial.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>ml_enhanced_strategy_initial.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">First pass at layering ML on top of the rules-based strategy.</div>
+        </a>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head">
+        <span class="module-index">03</span>
+        <h2>Risk &amp; Optimization</h2>
+        <span class="count">6 files</span>
+      </div>
+      <div class="grid">
+        <a class="card" href="sharpe_optimiser.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>sharpe_optimiser.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">Searches parameter space for the highest risk-adjusted return.</div>
+        </a>
+        <a class="card" href="sharpe_improvements.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>sharpe_improvements.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">Iterative tweaks logged on the way to a better Sharpe ratio.</div>
+        </a>
+        <a class="card" href="achieve_sharpe_2.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>achieve_sharpe_2.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">Pushes the strategy toward a target Sharpe ratio of 2.0.</div>
+        </a>
+        <a class="card" href="leverage_testing.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>leverage_testing.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">Stress-tests the strategy at different leverage levels.</div>
+        </a>
+        <a class="card" href="macro_filters.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>macro_filters.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">Filters trades using macro regime signals.</div>
+        </a>
+        <a class="card" href="param_sensitivity_3d.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>param_sensitivity_3d.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">Maps how sensitive returns are to each parameter, in three dimensions.</div>
+        </a>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head">
+        <span class="module-index">04</span>
+        <h2>Backtesting</h2>
+        <span class="count">2 files</span>
+      </div>
+      <div class="grid">
+        <a class="card" href="portfolio_backtesting.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>portfolio_backtesting.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">Backtests the strategy across a full portfolio.</div>
+        </a>
+        <a class="card" href="stock_backtesting.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>stock_backtesting.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">Backtests the strategy on individual stocks.</div>
+        </a>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head">
+        <span class="module-index">05</span>
+        <h2>Tools &amp; Docs</h2>
+        <span class="count">2 files</span>
+      </div>
+      <div class="grid">
+        <a class="card" href="strategy_visualiser.py">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>strategy_visualiser.py</span>
+            <span class="card-ext">PY</span>
+          </div>
+          <div class="card-desc">Renders strategy performance and signals visually.</div>
+        </a>
+        <a class="card" href="LICENSE">
+          <div class="card-top">
+            <span class="card-name"><span class="prompt">$</span>LICENSE</span>
+            <span class="card-ext">TXT</span>
+          </div>
+          <div class="card-desc">Terms of use for this project.</div>
+        </a>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    <span>QUANT-STRATEGY-LAB © 2026</span>
+    <span>17 files indexed · updated locally</span>
+  </footer>
+
+</body>
+</html>
